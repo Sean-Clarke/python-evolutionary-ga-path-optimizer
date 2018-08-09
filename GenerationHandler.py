@@ -2,7 +2,7 @@ from math import sqrt, factorial
 from random import random, randrange, sample
 
 class GenerationHandler:
-    
+
     def __init__(self, points, generation_size=20, number_of_generations=20):
         self.generation_size = generation_size
         self.number_of_generations = number_of_generations
@@ -15,7 +15,7 @@ class GenerationHandler:
         self.initialize()
         self.evolve()
         self.stats()
-        
+
     def initialize(self):
         if self.generation_size > factorial(len(self.points)):
             raise ValueError("generation_size must not be larger than factorial(len(points))")
@@ -33,10 +33,10 @@ class GenerationHandler:
         for c in range(len(s) - 1):
             f += sqrt((s[c][0] - s[c + 1][0])**2 + (s[c][1] - s[c+1][1])**2)
         return f
-        
+
     def evaluate(self):
         self.generation.sort(key=lambda x: self.fitness(x))
-        
+
     def select(self):
         selection = {0:[], 1:[], 2:[], 3:[], 4:[], 5:[]}
         selection[0].append(self.generation[0])
@@ -55,7 +55,15 @@ class GenerationHandler:
         for s in self.generation[16:20]:
             selection[5].append(s)
         return selection
-        
+
+    def subgroup(self, solution, group_size, rank=0):
+        """Given a solution, an int group_size of points, and an int fitness rank, returns the rank fittest group of points of size three within the solution"""
+        groups = []
+        for i in range(len(solution)-group_size):
+            groups.append(solution[i:i+group_size])
+        groups.sort(key=lambda x: self.fitness(x))
+        return groups[rank]
+
     def mutate(self, variant, solution):
         # variants: 0:single_swap, 1:group_swap, 2:cycle, 3:split_worst, 4:full_shuffle
         if variant == 0:
@@ -65,11 +73,19 @@ class GenerationHandler:
                 second = randrange(0, len(solution))
             solution[first], solution[second] = solution[second], solution[first]
         return solution
-        
+
     def crossover(self, variant, *parent_solutions):
-        # variants: 0:random_offset, 1:similar_groups, 2:best_groups, 3:avoid_similar 
+        # variants: 0:random_offset, 1:similar_groups, 2:best_groups, 3:avoid_similar
+        child = []
+        if variant == 0:
+            length = randrange(1, len(parent_solutions[0]))
+            start = randrange(0, len(parent_solutions[0]) - length + 1)
+            print(start)
+            print(length)
+            child = parent_solutions[0][start:start+length]
+            return child
         pass
-        
+
     def handle_mutations(self, mutation_map):
         next_generation = []
         for s in mutation_map[5]:
@@ -85,16 +101,16 @@ class GenerationHandler:
         for s in mutation_map[0]:
             next_generation.append(s)
         return next_generation
-        
+
     def handle_crossovers(self, crossover_pool, mutation_map):
         while sum(len(l) for l in mutation_map.values()) < self.generation_size and len(crossover_pool) > 1:
             pass
         return mutation_map
-        
+
     def next_generation(self, selection):
         mutation_map = {0:[], 1:[], 2:[], 3:[], 4:[], 5:[]}
         crossover_pool = []
-        
+
         mutation_map[1].append(selection[0][0])
         for s in selection[1]:
             mutation_map[2].append(s)
@@ -104,7 +120,7 @@ class GenerationHandler:
             mutation_map[4].append(s)
         for s in selection[4]:
             mutation_map[5].append(s)
-        
+
         #split selection into mutation_map and crossover_pool
         mutation_map = self.handle_crossovers(crossover_pool, mutation_map)
         while sum(len(l) for l in mutation_map.values()) < self.generation_size:
@@ -140,4 +156,4 @@ class GenerationHandler:
             print('   Fittest Solution Fitness: ' + str(self.best_solution[1]))
 
 if __name__ == "__main__":
-    gh = GenerationHandler(points=[(5,9),(8,6),(8,2),(5,0),(1,0),(0,2),(0,3),(1,9)], generation_size=20, number_of_generations=2000)
+    gh = GenerationHandler(points=[(5,9),(8,6),(8,2),(5,0),(1,0),(0,2),(0,3),(1,9)], generation_size=20, number_of_generations=100)
