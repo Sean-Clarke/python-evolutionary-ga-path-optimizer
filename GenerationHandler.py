@@ -1,5 +1,5 @@
 from math import sqrt, factorial, ceil
-from random import random, randrange, sample
+from random import random, randrange, sample, choices
 import matplotlib.pyplot
 import matplotlib.animation
 import time
@@ -54,7 +54,7 @@ class GenerationHandler:
             if c in skip:
                 continue
             if self.heuristics['prefer'][self.heuristics['prefer'][c][0]][0] == c:
-                self.heuristics['boundpair'].append((c, self.heuristics['prefer'][c][0]))
+                self.heuristics['boundpair'].append([c, self.heuristics['prefer'][c][0]])
                 skip.append(self.heuristics['prefer'][c][0])
         return True
 
@@ -70,9 +70,10 @@ class GenerationHandler:
     def select(self):
         selection = {0:[], 1:[], 2:[], 3:[], 4:[], 5:[]}
         selection[0].append(self.generation[0])
-        #if self.current_generation > 9 and self.generations[self.current_generation]['apexfitness'] < self.generations[self.current_generation - 10]['apexfitness']:
-        #    selection[0][0] = self.generations[self.current_generation - 10]['apexstrand']
-        for s in self.generation[1:4]:
+        if self.current_generation > 9 and self.generations[self.current_generation]['apexfitness'] < self.generations[self.current_generation - 10]['apexfitness']:
+            selection[1].append(self.generations[self.current_generation - 10]['apexstrand'])
+        selection[1].append(self.generation[1])
+        for s in self.generation[2:4]:
             if random() > 0.2:
                 selection[1].append(s)
         for s in self.generation[4:8]:
@@ -96,16 +97,66 @@ class GenerationHandler:
         groups.sort(key=lambda x: self.fitness(x))
         return groups[rank]
 
-    def mutate(self, variant, solution):
-        # variants: 0:single_swap, 1:group_swap, 2:cycle, 3:split_worst, 4:full_shuffle
+    def mutate(self, variant, solution, use_heuristics=False):
+        # variants: 0:best_single_swap, 1:cycle_to_outlier, 2:improve_single_swap, 3:cycle_once, 4:random_single_swap, 5:random_group_swap, 6:split_worst, 7:something_else, 8:full_shuffle
+        if variant != 0:
+            variant = 0
         s = solution[:]
-        if variant == 0:
-            first = randrange(0, len(s))
-            second = first
-            while second == first:
-                second = randrange(0, len(s))
-            s[first], s[second] = s[second], s[first]
-        if variant == 1:
+        if variant == 0: # random_swap
+            """randomly chooses two coordinates to swap places in the solution"""
+            exhausted = []
+            used_pairs = []
+            while True:
+                if len(exhausted) > len(s) - 2:
+                    return False
+                s = solution[:]
+                first = randrange(0, len(s))
+                while first in exhausted:
+                    first = randrange(0, len(s))
+                second = first
+                while second == first or second in exhausted or set([first, second]) in used_pairs:
+                    second = randrange(0, len(s))
+                s[first], s[second] = s[second], s[first]
+                if use_heuristics:
+                    net = 0
+                    if first > 0:
+                        if s[first - 1] in self.heuristics['avoid'][s[first]]:
+                            net -= 1
+                        if s[first - 1] in self.heuristics['prefer'][s[first]]:
+                            net += 1
+                    if first < len(s) - 1:
+                        if s[first + 1] in self.heuristics['avoid'][s[first]]:
+                            net -= 1
+                        if s[first + 1] in self.heuristics['prefer'][s[first]]:
+                            net += 1  
+                    if second > 0:
+                        if s[second - 1] in self.heuristics['avoid'][s[second]]:
+                            net -= 1
+                        if s[second - 1] in self.heuristics['prefer'][s[second]]:
+                            net += 1
+                    if second < len(s) - 1:
+                        if s[second + 1] in self.heuristics['avoid'][s[second]]:
+                            net -= 1
+                        if s[second + 1] in self.heuristics['prefer'][s[second]]:
+                            net += 1
+                    if net < 0:
+                        used_pairs.append(set([first, second]))
+                        first_exhaustion = 0
+                        second_exhaustion = 0
+                        for p in used_pairs:
+                            if first in p:
+                                first_exhaustion += 1
+                            if second in p:
+                                second_exhaustion += 1
+                        if first_exhaustion > len(s) - 1:
+                            exhausted.append(first)
+                        if second_exhaustion > len(s) - 1:
+                            exhausted.append(second)
+                        continue
+                break
+                
+        if variant == 1: # random_group_swap
+            """randomly chooses two groups of coordinates to swap places in the solution"""
             group_size = randrange(2, len(s) // 2 + 1)
             start = randrange(0, len(s) - 2 * group_size + 1)
             first = s[start:start + group_size]
@@ -113,7 +164,7 @@ class GenerationHandler:
             sstart = s.index(second[0])
             for i in range(0, group_size):
                 s[start + i], s[sstart + i] = s[sstart + i], s[start + i]
-        if variant == 2:
+        if variant == 3:
             for c in range(1, len(s)):
                 s[c] = solution[c-1]
             s[0] = solution[-1]
@@ -123,6 +174,8 @@ class GenerationHandler:
 
     def crossover(self, variant, f, m):
         # variants: 0:random_offset, 1:similar_groups, 2:best_groups, 3:avoid_similar
+        if variant != 0:
+            variant = 0
         child = []
         if variant == 0:
             length = randrange(1, len(f))
@@ -136,53 +189,65 @@ class GenerationHandler:
 
     def handle_mutations(self, mutation_map):
         next_generation = []
-        for s in mutation_map[5]:
-            mutation_map[4].append(self.mutate(0, s))
-        for s in mutation_map[4]:
-            mutation_map[2].append(self.mutate(0, s))
-        for s in mutation_map[3]:
-            mutation_map[1].append(self.mutate(0, s))
-        for s in mutation_map[2]:
-            mutation_map[0].append(self.mutate(0, s))
-        for s in mutation_map[1]:
-            mutation_map[0].append(self.mutate(ceil(random() * 3), s))
-        for s in mutation_map[0]:
-            next_generation.append(s)
+        for i in sorted(list(mutation_map.keys()), reverse=True):
+            for s in mutation_map[i]:
+                if i != 0:
+                    mutation = False
+                    while not mutation:
+                        if i == 1:
+                            v = randrange(0, 4)
+                        else:
+                            v = randrange(4-i, 5+i)
+                        if i == 5:
+                            v = 8
+                        mutation = self.mutate(v, s)
+                    mutation_map[max(i, 2) - 2].append(mutation)
+                else:
+                    next_generation.append(s)
         return next_generation
 
-    def handle_crossovers(self, crossover_pool, crossover_map, mutation_map):
-        while sum(len(l) for l in mutation_map.values()) < self.generation_size:
-            roulette = sorted(list(crossover_map.keys()), key=lambda x: random() * crossover_map[x], reverse=True)
-            mutation_map[0].append(self.crossover(0, crossover_pool[roulette[0]], crossover_pool[roulette[1]]))
+    def handle_crossovers(self, crossover_pool, crossover_weights, mutation_map, allowance):
+        starchild = self.crossover(0, crossover_pool[0], crossover_pool[1])
+        if allowance > 0:
+            mutation_map[0].append(starchild)
+            allowance -= 1
+        if allowance > 0:
+            mutation_map[2].append(starchild)
+            allowance -= 1
+        while allowance > 0:
+            f = choices(crossover_pool, weights=crossover_weights, k=1)[0]
+            fw = crossover_weights[crossover_pool.index(f)] * 0.8
+            crossover_weights[crossover_pool.index(f)] = 0
+            m = choices(crossover_pool, weights=crossover_weights, k=1)[0]
+            crossover_weights[crossover_pool.index(f)] = fw
+            mutation_map[0].append(self.crossover(randrange(0, 4), f, m))
+            allowance -= 1
         return mutation_map
 
     def next_generation(self, selection):
-        mutation_map = {0:[], 1:[], 2:[], 3:[], 4:[], 5:[]}
+        mutation_map = {0:[], 1:[], 2:[], 3:[], 4:[], 5:[]} # 0:no mutate, 1:cycle or improve, 2: random, 3: random then 1, 4: broad random then 2, 5: full shuffle then 3
         crossover_pool = []
-        crossover_map = {}
-        crossover_index = 0
+        crossover_weights = []
         mutation_map[1].append(selection[0][0])
+        mutation_map[2].append(selection[0][0])
+        mutation_map[3].append(selection[0][0])
         crossover_pool.append(selection[0][0])
-        crossover_map[crossover_index] = 2.2
-        crossover_index += 1
+        crossover_weights.append(20)
         for s in selection[1]:
             mutation_map[2].append(s)
             crossover_pool.append(s)
-            crossover_map[crossover_index] = 0.8
-            crossover_index += 1
+            crossover_weights.append(12)
         for s in selection[2]:
             mutation_map[3].append(s)
             crossover_pool.append(s)
-            crossover_map[crossover_index] = 0.5
-            crossover_index += 1
+            crossover_weights.append(8)
         for s in selection[3]:
             mutation_map[4].append(s)
             crossover_pool.append(s)
-            crossover_map[crossover_index] = 0.25
-            crossover_index += 1
+            crossover_weights.append(4)
         for s in selection[4]:
             mutation_map[5].append(s)
-        mutation_map = self.handle_crossovers(crossover_pool, crossover_map, mutation_map)
+        mutation_map = self.handle_crossovers(crossover_pool, crossover_weights, mutation_map, self.generation_size - sum(len(l) for l in mutation_map.values()))
         while sum(len(l) for l in mutation_map.values()) < self.generation_size:
             new_solution = sample(self.points, k=len(self.points))
             if new_solution not in self.all_solutions:
@@ -202,7 +267,9 @@ class GenerationHandler:
             self.generations[self.current_generation]['apexstrand'] = self.generation[0]
             self.generations[self.current_generation]['apexfitness'] = self.fitness(self.generation[0])
             self.generations[self.current_generation]['globalapex'] = self.best_solution[0]
-            self.stats()
+            if self.debug:
+                self.stats()
+                input("Press any key")
             selection = self.select()
             self.generation = self.next_generation(selection)
             self.current_generation += 1
@@ -236,6 +303,8 @@ class GenerationHandler:
             self.animation()
 
 if __name__ == "__main__":
-    #gh = GenerationHandler(points=[(1,1),(1,3),(3,5),(8,5),(12,2),(12,1),(10,0)], generation_size=20, number_of_generations=10, debug=False)
-    #gh = GenerationHandler(points=[(1,1),(5,4),(5,7),(5,16),(6,11),(6,21),(10,23),(15,23),(16,10),(16,12),(18,9),(18,17),(19,20),(20,14)], generation_size=20, number_of_generations=400, debug=False)
-    gh = GenerationHandler(points=[(4,2),(8,4),(19,2),(4,12),(9,9),(10,10),(1,1),(4,9),(10,14),(16,16),(13,6),(5,4),(5,7),(5,16),(6,11),(6,21),(10,23),(15,23),(16,5),(16,12),(18,9),(18,17),(19,20),(20,14)], generation_size=20, number_of_generations=15000, debug=False)
+    #curve = GenerationHandler(points=[(1,1),(3,1),(6,2),(10,4),(15,8),(21,16)], generation_size=20, number_of_generations=20, debug=False)
+    #circle = GenerationHandler(points=[(2,1),(1,3),(3,5),(5,0),(9,5),(8,0),(11,4),(11,1),(12,2)], generation_size=20, number_of_generations=60, debug=False)
+    #spiral = GenerationHandler(points=[(25,26),(26,25),(27,25),(28,26),(28,28),(27,30),(25,31),(23,31),(21,28),(21,24),(23,19),(26,17),(29,18),(31,22),(32,27),(31,33),(28,38),(25,40),(22,39),(19,37)], generation_size=20, number_of_generations=30000, debug=False)
+    #canada = GenerationHandler(points=[(2,2),(4,47),(5,6),(7,15),(8,41),(9,27),(12,17),(18,7),(18,14),(19,27),(22,43),(23,19),(27,23),(31,8),(33,3),(33,11),(37,1),(37,39),(38,11),(39,6),(42,2),(47,9),(48,26),(49,6),(49,12)], generation_size=20, number_of_generations=30000, debug=False)
+    europe = GenerationHandler(points=[(4,87),(12,15),(16,54),(19,14),(19,38),(20,26),(21,51),(25,62),(26,15),(26,48),(29,36),(35,18),(39,28),(39,45),(41,13),(43,6),(46,21),(48,67),(50,55),(51,44),(52,38),(53,30),(55,62),(57,24),(57,29),(62,40),(63,24),(64,0),(67,70),(70,11),(70,47),(73,62),(79,35),(87,53)], generation_size=20, number_of_generations=2000, debug=False)
