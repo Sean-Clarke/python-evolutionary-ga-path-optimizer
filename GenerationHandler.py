@@ -6,10 +6,11 @@ import time
 
 class GenerationHandler:
 
-    def __init__(self, points, generation_size=20, number_of_generations=20):
+    def __init__(self, points, generation_size=20, number_of_generations=20, debug=True):
+        self.points = points
         self.generation_size = generation_size
         self.number_of_generations = number_of_generations
-        self.points = points
+        self.debug = debug
         self.current_generation = 0
         self.generations = {}
         self.generation = []
@@ -32,7 +33,7 @@ class GenerationHandler:
                 self.generation.append(new_solution)
                 self.all_solutions.append(new_solution)
         return True
-        
+
     def generate_heuristics(self):
         self.heuristics['relationships'] = {}
         self.heuristics['prefer'] = {}
@@ -47,15 +48,15 @@ class GenerationHandler:
             self.heuristics['avoid'][self.points[c]] = relationships[-min(5, len(self.points) // 2):]
         skip = []
         for c in self.points:
-            if c in skip:
-                continue
             for o in self.heuristics['prefer'][c]:
                 if c in self.heuristics['avoid'][o]:
                     self.heuristics['avoid'][o].remove(c)
+            if c in skip:
+                continue
             if self.heuristics['prefer'][self.heuristics['prefer'][c][0]][0] == c:
-                self.heuristics['boundpair'].append((c,self.heuristics['prefer'][c][0]))
-            skip.append(self.heuristics['prefer'][c][0])
-        print(self.heuristics['boundpair'])
+                self.heuristics['boundpair'].append((c, self.heuristics['prefer'][c][0]))
+                skip.append(self.heuristics['prefer'][c][0])
+        return True
 
     def fitness(self, s):
         f = 0
@@ -115,7 +116,7 @@ class GenerationHandler:
         if variant == 2:
             for c in range(1, len(s)):
                 s[c] = solution[c-1]
-            s[0] = solution[-1] 
+            s[0] = solution[-1]
             if s in self.all_solutions:
                 s = self.mutate(0, s)
         return s
@@ -205,12 +206,12 @@ class GenerationHandler:
             selection = self.select()
             self.generation = self.next_generation(selection)
             self.current_generation += 1
-    
+
     def animate(self, i):
         self.axis.clear()
         x, y = [c[0] for c in self.generations[i]['globalapex']], [c[1] for c in self.generations[i]['globalapex']]
         [self.axis.plot([x[p],x[p+1]], [y[p],y[p+1]], 'o-') for p in range(len(x) - 1)]
-    
+
     def animation(self):
         self.fig = matplotlib.pyplot.figure()
         self.axis = self.fig.add_subplot(1,1,1)
@@ -220,7 +221,7 @@ class GenerationHandler:
                 frames.append(g)
         anim = matplotlib.animation.FuncAnimation(self.fig, self.animate, frames=frames, interval=50, repeat_delay=2500)
         matplotlib.pyplot.show()
-            
+
     def stats(self):
         if self.current_generation != self.number_of_generations:
             print('Generation ' + str(self.current_generation) + ':')
@@ -235,6 +236,6 @@ class GenerationHandler:
             self.animation()
 
 if __name__ == "__main__":
-    #gh = GenerationHandler(points=[(1,1),(1,3),(3,5),(8,5),(12,2),(12,1),(10,0)], generation_size=20, number_of_generations=10)
-    gh = GenerationHandler(points=[(1,1),(5,4),(5,7),(5,16),(6,11),(6,21),(10,23),(15,23),(16,10),(16,12),(18,9),(18,17),(19,20),(20,14)], generation_size=20, number_of_generations=400)
-    #gh = GenerationHandler(points=[(4,2),(8,4),(19,2),(4,12),(9,9),(10,10),(1,1),(4,9),(10,14),(16,16),(13,6),(5,4),(5,7),(5,16),(6,11),(6,21),(10,23),(15,23),(16,5),(16,12),(18,9),(18,17),(19,20),(20,14)], generation_size=20, number_of_generations=10)
+    #gh = GenerationHandler(points=[(1,1),(1,3),(3,5),(8,5),(12,2),(12,1),(10,0)], generation_size=20, number_of_generations=10, debug=False)
+    #gh = GenerationHandler(points=[(1,1),(5,4),(5,7),(5,16),(6,11),(6,21),(10,23),(15,23),(16,10),(16,12),(18,9),(18,17),(19,20),(20,14)], generation_size=20, number_of_generations=400, debug=False)
+    gh = GenerationHandler(points=[(4,2),(8,4),(19,2),(4,12),(9,9),(10,10),(1,1),(4,9),(10,14),(16,16),(13,6),(5,4),(5,7),(5,16),(6,11),(6,21),(10,23),(15,23),(16,5),(16,12),(18,9),(18,17),(19,20),(20,14)], generation_size=20, number_of_generations=15000, debug=False)
