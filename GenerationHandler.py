@@ -97,65 +97,80 @@ class GenerationHandler:
         groups.sort(key=lambda x: self.fitness(x))
         return groups[rank]
 
-    def mutate(self, variant, solution, use_heuristics=False):
-        # variants: 0:best_single_swap, 1:cycle_to_outlier, 2:improve_single_swap, 3:cycle_once, 4:random_single_swap, 5:random_group_swap, 6:split_worst, 7:something_else, 8:full_shuffle
+    def random_swap(self, solution, use_heuristics):
+        exhausted = []
+        used_pairs = []
+        while True:
+            s = solution[:]
+            if len(exhausted) > len(s) - 2:
+                return self.mutate(randrange(0, 9), s, use_heuristics)
+            first = randrange(0, len(s))
+            while first in exhausted:
+                first = randrange(0, len(s))
+            second = first
+            while second == first or second in exhausted or set([first, second]) in used_pairs:
+                second = randrange(0, len(s))
+            s[first], s[second] = s[second], s[first]
+            if use_heuristics:
+                net = 0
+                if first > 0:
+                    if s[first - 1] in self.heuristics['avoid'][s[first]]:
+                        net -= 1
+                    if s[first - 1] in self.heuristics['prefer'][s[first]]:
+                        net += 1
+                if first < len(s) - 1:
+                    if s[first + 1] in self.heuristics['avoid'][s[first]]:
+                        net -= 1
+                    if s[first + 1] in self.heuristics['prefer'][s[first]]:
+                        net += 1
+                if second > 0:
+                    if s[second - 1] in self.heuristics['avoid'][s[second]]:
+                        net -= 1
+                    if s[second - 1] in self.heuristics['prefer'][s[second]]:
+                        net += 1
+                if second < len(s) - 1:
+                    if s[second + 1] in self.heuristics['avoid'][s[second]]:
+                        net -= 1
+                    if s[second + 1] in self.heuristics['prefer'][s[second]]:
+                        net += 1
+                if net < 0:
+                    used_pairs.append(set([first, second]))
+                    first_exhaustion = 0
+                    second_exhaustion = 0
+                    for p in used_pairs:
+                        if first in p:
+                            first_exhaustion += 1
+                        if second in p:
+                            second_exhaustion += 1
+                    if first_exhaustion > len(s) - 1:
+                        exhausted.append(first)
+                    if second_exhaustion > len(s) - 1:
+                        exhausted.append(second)
+                    continue
+            return s
+
+    def cycle(self, solution, attempts):
+        s = solution[:]
+        for c in range(1, len(s)):
+            s[c] = solution[c-1]
+        s[0] = solution[-1]
+        if s in self.all_solutions:
+            if attempts < len(s):
+                self.cycle(s, attempts + 1)
+            else:
+                s = self.mutate(0, s)
+        return s
+
+    def mutate(self, variant, solution, use_heuristics=True):
+        # variants: 0:best_single_swap, 1:cycle_once, 2:improve_single_swap, 3:cycle_to_outlier, 4:random_single_swap, 5:random_group_swap, 6:split_worst, 7:something_else, 8:full_shuffle
         if variant != 0:
             variant = 0
         s = solution[:]
         if variant == 0: # random_swap
             """randomly chooses two coordinates to swap places in the solution"""
-            exhausted = []
-            used_pairs = []
-            while True:
-                if len(exhausted) > len(s) - 2:
-                    return False
-                s = solution[:]
-                first = randrange(0, len(s))
-                while first in exhausted:
-                    first = randrange(0, len(s))
-                second = first
-                while second == first or second in exhausted or set([first, second]) in used_pairs:
-                    second = randrange(0, len(s))
-                s[first], s[second] = s[second], s[first]
-                if use_heuristics:
-                    net = 0
-                    if first > 0:
-                        if s[first - 1] in self.heuristics['avoid'][s[first]]:
-                            net -= 1
-                        if s[first - 1] in self.heuristics['prefer'][s[first]]:
-                            net += 1
-                    if first < len(s) - 1:
-                        if s[first + 1] in self.heuristics['avoid'][s[first]]:
-                            net -= 1
-                        if s[first + 1] in self.heuristics['prefer'][s[first]]:
-                            net += 1  
-                    if second > 0:
-                        if s[second - 1] in self.heuristics['avoid'][s[second]]:
-                            net -= 1
-                        if s[second - 1] in self.heuristics['prefer'][s[second]]:
-                            net += 1
-                    if second < len(s) - 1:
-                        if s[second + 1] in self.heuristics['avoid'][s[second]]:
-                            net -= 1
-                        if s[second + 1] in self.heuristics['prefer'][s[second]]:
-                            net += 1
-                    if net < 0:
-                        used_pairs.append(set([first, second]))
-                        first_exhaustion = 0
-                        second_exhaustion = 0
-                        for p in used_pairs:
-                            if first in p:
-                                first_exhaustion += 1
-                            if second in p:
-                                second_exhaustion += 1
-                        if first_exhaustion > len(s) - 1:
-                            exhausted.append(first)
-                        if second_exhaustion > len(s) - 1:
-                            exhausted.append(second)
-                        continue
-                break
-                
-        if variant == 1: # random_group_swap
+            self.random_swap(s, use_heuristics)
+
+        if variant > 0: # random_group_swap
             """randomly chooses two groups of coordinates to swap places in the solution"""
             group_size = randrange(2, len(s) // 2 + 1)
             start = randrange(0, len(s) - 2 * group_size + 1)
@@ -165,11 +180,7 @@ class GenerationHandler:
             for i in range(0, group_size):
                 s[start + i], s[sstart + i] = s[sstart + i], s[start + i]
         if variant == 3:
-            for c in range(1, len(s)):
-                s[c] = solution[c-1]
-            s[0] = solution[-1]
-            if s in self.all_solutions:
-                s = self.mutate(0, s)
+            self.cycle(self, s, 0)
         return s
 
     def crossover(self, variant, f, m):
@@ -184,8 +195,9 @@ class GenerationHandler:
             for c in m:
                 if c not in child:
                     child.append(c)
+            if child == f or child == m:
+                child = self.crossover(variant, f, m)
             return child
-        pass
 
     def handle_mutations(self, mutation_map):
         next_generation = []
@@ -207,6 +219,7 @@ class GenerationHandler:
         return next_generation
 
     def handle_crossovers(self, crossover_pool, crossover_weights, mutation_map, allowance):
+        print(allowance)
         starchild = self.crossover(0, crossover_pool[0], crossover_pool[1])
         if allowance > 0:
             mutation_map[0].append(starchild)
@@ -258,21 +271,26 @@ class GenerationHandler:
     def evolve(self):
         while self.current_generation < self.number_of_generations:
             self.evaluate()
-            if self.best_solution == [0, 0, 0] or self.fitness(self.generation[0]) < self.best_solution[1]:
-                self.best_solution[0] = self.generation[0]
-                self.best_solution[1] = self.fitness(self.generation[0])
-                self.best_solution[2] = self.current_generation
-            self.generations[self.current_generation] = {}
-            self.generations[self.current_generation]['genomes'] = self.generation
-            self.generations[self.current_generation]['apexstrand'] = self.generation[0]
-            self.generations[self.current_generation]['apexfitness'] = self.fitness(self.generation[0])
-            self.generations[self.current_generation]['globalapex'] = self.best_solution[0]
-            if self.debug:
-                self.stats()
-                input("Press any key")
+            self.log()
             selection = self.select()
             self.generation = self.next_generation(selection)
+            for solution in self.generation:
+                self.all_solutions.append(solution)
             self.current_generation += 1
+
+    def log(self):
+        if self.best_solution == [0, 0, 0] or self.fitness(self.generation[0]) < self.best_solution[1]:
+            self.best_solution[0] = self.generation[0]
+            self.best_solution[1] = self.fitness(self.generation[0])
+            self.best_solution[2] = self.current_generation
+        self.generations[self.current_generation] = {}
+        self.generations[self.current_generation]['genomes'] = self.generation
+        self.generations[self.current_generation]['apexstrand'] = self.generation[0]
+        self.generations[self.current_generation]['apexfitness'] = self.fitness(self.generation[0])
+        self.generations[self.current_generation]['globalapex'] = self.best_solution[0]
+        if self.debug:
+            self.stats()
+            input("Press any key")
 
     def animate(self, i):
         self.axis.clear()
@@ -292,19 +310,19 @@ class GenerationHandler:
     def stats(self):
         if self.current_generation != self.number_of_generations:
             print('Generation ' + str(self.current_generation) + ':')
-            print('   Fittest Solution: ' + str(self.generation[0]))
-            print('   Best Fitness: ' + str(self.fitness(self.generation[0])))
-            print('   Average Fitness: ' + str(sum(self.fitness(s) for s in self.generation) / len(self.generation)) + '\n')
+            print('  Fittest Solution: ' + str(self.generation[0]))
+            print('  Best Fitness: ' + str(self.fitness(self.generation[0])))
+            print('  Average Fitness: ' + str(sum(self.fitness(s) for s in self.generation) / len(self.generation)) + '\n')
         else:
             print('Final Stats:')
-            print('   Fittest solution found in generation ' + str(self.best_solution[2]))
-            print('   Fittest Solution: ' + str(self.best_solution[0]))
-            print('   Fittest Solution Fitness: ' + str(self.best_solution[1]))
+            print('  Fittest solution found in generation ' + str(self.best_solution[2]))
+            print('  Fittest Solution: ' + str(self.best_solution[0]))
+            print('  Fittest Solution Fitness: ' + str(self.best_solution[1]))
             self.animation()
 
 if __name__ == "__main__":
     #curve = GenerationHandler(points=[(1,1),(3,1),(6,2),(10,4),(15,8),(21,16)], generation_size=20, number_of_generations=20, debug=False)
-    #circle = GenerationHandler(points=[(2,1),(1,3),(3,5),(5,0),(9,5),(8,0),(11,4),(11,1),(12,2)], generation_size=20, number_of_generations=60, debug=False)
+    circle = GenerationHandler(points=[(2,1),(1,3),(3,5),(5,0),(9,5),(8,0),(11,4),(11,1),(12,2)], generation_size=20, number_of_generations=40, debug=False)
     #spiral = GenerationHandler(points=[(25,26),(26,25),(27,25),(28,26),(28,28),(27,30),(25,31),(23,31),(21,28),(21,24),(23,19),(26,17),(29,18),(31,22),(32,27),(31,33),(28,38),(25,40),(22,39),(19,37)], generation_size=20, number_of_generations=30000, debug=False)
-    #canada = GenerationHandler(points=[(2,2),(4,47),(5,6),(7,15),(8,41),(9,27),(12,17),(18,7),(18,14),(19,27),(22,43),(23,19),(27,23),(31,8),(33,3),(33,11),(37,1),(37,39),(38,11),(39,6),(42,2),(47,9),(48,26),(49,6),(49,12)], generation_size=20, number_of_generations=30000, debug=False)
-    europe = GenerationHandler(points=[(4,87),(12,15),(16,54),(19,14),(19,38),(20,26),(21,51),(25,62),(26,15),(26,48),(29,36),(35,18),(39,28),(39,45),(41,13),(43,6),(46,21),(48,67),(50,55),(51,44),(52,38),(53,30),(55,62),(57,24),(57,29),(62,40),(63,24),(64,0),(67,70),(70,11),(70,47),(73,62),(79,35),(87,53)], generation_size=20, number_of_generations=2000, debug=False)
+    #canada = GenerationHandler(points=[(2,2),(4,47),(5,6),(7,15),(8,41),(9,27),(12,17),(18,7),(18,14),(19,27),(22,43),(23,19),(27,23),(31,8),(33,3),(33,11),(37,1),(37,39),(38,11),(39,6),(42,2),(47,9),(48,26),(49,6),(49,12)], generation_size=20, number_of_generations=40, debug=False)
+    #europe = GenerationHandler(points=[(4,87),(12,15),(16,54),(19,14),(19,38),(20,26),(21,51),(25,62),(26,15),(26,48),(29,36),(35,18),(39,28),(39,45),(41,13),(43,6),(46,21),(48,67),(50,55),(51,44),(52,38),(53,30),(55,62),(57,24),(57,29),(62,40),(63,24),(64,0),(67,70),(70,11),(70,47),(73,62),(79,35),(87,53)], generation_size=20, number_of_generations=30000, debug=False)
