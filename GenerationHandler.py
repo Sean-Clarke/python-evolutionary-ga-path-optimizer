@@ -2,7 +2,6 @@ from math import sqrt, factorial, ceil
 from random import random, randrange, sample, choices
 import matplotlib.pyplot
 import matplotlib.animation
-import time
 
 class GenerationHandler:
 
@@ -17,6 +16,7 @@ class GenerationHandler:
         self.all_solutions = []
         self.best_solution = [0, 0, 0]
         self.heuristics = {}
+        self.repeats = 0
         self.generate_heuristics()
         self.initialize()
         self.evolve()
@@ -25,8 +25,8 @@ class GenerationHandler:
     def initialize(self):
         if self.generation_size > factorial(len(self.points)):
             raise ValueError("generation_size must not be larger than factorial(len(points))")
-        if self.generation_size != 20:
-            raise ValueError("generation_size is currently only implemented to have the value 20")
+        if self.generation_size < 2:
+            raise ValueError("generation_size must be greater than 2")
         while len(self.generation) < self.generation_size:
             new_solution = sample(self.points, k=len(self.points))
             if new_solution not in self.all_solutions:
@@ -73,19 +73,19 @@ class GenerationHandler:
         if self.current_generation > 9 and self.generations[self.current_generation]['apexfitness'] < self.generations[self.current_generation - 10]['apexfitness']:
             selection[1].append(self.generations[self.current_generation - 10]['apexstrand'])
         selection[1].append(self.generation[1])
-        for s in self.generation[2:4]:
+        for s in self.generation[2:max(len(self.generation) // 5, 3)]:
             if random() > 0.2:
                 selection[1].append(s)
-        for s in self.generation[4:8]:
+        for s in self.generation[max(len(self.generation) // 5, 3):max(2 * len(self.generation) // 5, 4)]:
             if random() > 0.4:
                 selection[2].append(s)
-        for s in self.generation[8:12]:
+        for s in self.generation[max(2 * len(self.generation) // 5, 4):max(3 * len(self.generation) // 5, 5)]:
             if random() > 0.6:
                 selection[3].append(s)
-        for s in self.generation[12:16]:
+        for s in self.generation[max(3 * len(self.generation) // 5, 5):max(4 * len(self.generation) // 5, 6)]:
             if random() > 0.8:
                 selection[4].append(s)
-        for s in self.generation[16:20]:
+        for s in self.generation[max(4 * len(self.generation) // 5, 6):max(len(self.generation), 7)]:
             selection[5].append(s)
         return selection
 
@@ -215,11 +215,14 @@ class GenerationHandler:
                         mutation = self.mutate(v, s)
                     mutation_map[max(i, 2) - 2].append(mutation)
                 else:
+                    while s in self.all_solutions:
+                        #s = self.mutate(randrange(0, 9), s) #should be this when all mutations implemented
+                        s = sample(self.points, k=len(self.points))
+                    self.all_solutions.append(s)
                     next_generation.append(s)
         return next_generation
 
     def handle_crossovers(self, crossover_pool, crossover_weights, mutation_map, allowance):
-        print(allowance)
         starchild = self.crossover(0, crossover_pool[0], crossover_pool[1])
         if allowance > 0:
             mutation_map[0].append(starchild)
@@ -274,8 +277,6 @@ class GenerationHandler:
             self.log()
             selection = self.select()
             self.generation = self.next_generation(selection)
-            for solution in self.generation:
-                self.all_solutions.append(solution)
             self.current_generation += 1
 
     def log(self):
@@ -321,8 +322,10 @@ class GenerationHandler:
             self.animation()
 
 if __name__ == "__main__":
-    #curve = GenerationHandler(points=[(1,1),(3,1),(6,2),(10,4),(15,8),(21,16)], generation_size=20, number_of_generations=20, debug=False)
-    circle = GenerationHandler(points=[(2,1),(1,3),(3,5),(5,0),(9,5),(8,0),(11,4),(11,1),(12,2)], generation_size=20, number_of_generations=40, debug=False)
+    #simple = GenerationHandler(points=[(0,0),(5,0),(0,4),(6,5)], generation_size=20, number_of_generations=20, debug=True)
+    #curve = GenerationHandler(points=[(1,1),(3,1),(6,2),(10,4),(15,8),(21,16)], generation_size=20, number_of_generations=20, debug=False )
+    circle = GenerationHandler(points=[(2,1),(1,3),(3,5),(5,0),(9,5),(8,0),(11,4),(11,1),(12,2)], generation_size=20, number_of_generations=200, debug=False)
     #spiral = GenerationHandler(points=[(25,26),(26,25),(27,25),(28,26),(28,28),(27,30),(25,31),(23,31),(21,28),(21,24),(23,19),(26,17),(29,18),(31,22),(32,27),(31,33),(28,38),(25,40),(22,39),(19,37)], generation_size=20, number_of_generations=30000, debug=False)
     #canada = GenerationHandler(points=[(2,2),(4,47),(5,6),(7,15),(8,41),(9,27),(12,17),(18,7),(18,14),(19,27),(22,43),(23,19),(27,23),(31,8),(33,3),(33,11),(37,1),(37,39),(38,11),(39,6),(42,2),(47,9),(48,26),(49,6),(49,12)], generation_size=20, number_of_generations=40, debug=False)
     #europe = GenerationHandler(points=[(4,87),(12,15),(16,54),(19,14),(19,38),(20,26),(21,51),(25,62),(26,15),(26,48),(29,36),(35,18),(39,28),(39,45),(41,13),(43,6),(46,21),(48,67),(50,55),(51,44),(52,38),(53,30),(55,62),(57,24),(57,29),(62,40),(63,24),(64,0),(67,70),(70,11),(70,47),(73,62),(79,35),(87,53)], generation_size=20, number_of_generations=30000, debug=False)
+    pass
